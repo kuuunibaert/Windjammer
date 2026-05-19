@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Windjammers</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:        #0d1b2a;
+      --navy-mid:    #162237;
+      --navy-light:  #1e3250;
+      --gold:        #c9a227;
+      --gold-bright: #e8c040;
+      --cream:       #f2e8d5;
+      --cream-dim:   #9e8f78;
+      --red:         #b83232;
+      --dark:        #070e17;
+      --green:       #2ecc71;
+      --shadow:      rgba(0,0,0,0.6);
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Crimson Text', serif;
+      background-color: var(--navy);
+      color: var(--cream);
+      overflow-x: hidden;
+    }
+
+    /* Animated ocean background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 15% 60%, rgba(14,40,70,0.5) 0%, transparent 55%),
+        radial-gradient(ellipse 60% 40% at 85% 25%, rgba(201,162,39,0.06) 0%, transparent 45%),
+        repeating-linear-gradient(
+          178deg,
+          transparent,
+          transparent 40px,
+          rgba(255,255,255,0.012) 40px,
+          rgba(255,255,255,0.012) 41px
+        );
+      pointer-events: none;
+    }
+
+    /* ─── SCREEN SWITCHING ───────────────────────────────── */
+    .screen { display: none; position: relative; z-index: 1; }
+    .screen.active { display: flex; }
+
+    /* ═══════════════════════════════════════════════════════
+       LOGIN SCREEN
+    ═══════════════════════════════════════════════════════ */
+    #screen-login {
+      min-height: 100vh;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .login-box {
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    /* Ship icon */
+    .ship-icon {
+      font-size: 3rem;
+      margin-bottom: 0.5rem;
+      filter: drop-shadow(0 0 16px rgba(201,162,39,0.5));
+      animation: sway 4s ease-in-out infinite;
+    }
+    @keyframes sway {
+      0%, 100% { transform: rotate(-4deg); }
+      50%       { transform: rotate(4deg); }
+    }
+
+    .game-title {
+      font-family: 'Cinzel', serif;
+      font-weight: 900;
+      font-size: clamp(2.8rem, 8vw, 4.5rem);
+      color: var(--gold);
+      letter-spacing: 0.12em;
+      line-height: 1;
+      text-shadow: 0 0 40px rgba(201,162,39,0.5), 0 3px 0 rgba(0,0,0,0.6);
+      animation: glow 3s ease-in-out infinite alternate;
+    }
+    @keyframes glow {
+      from { text-shadow: 0 0 20px rgba(201,162,39,0.3), 0 3px 0 rgba(0,0,0,0.6); }
+      to   { text-shadow: 0 0 60px rgba(201,162,39,0.8), 0 0 20px rgba(201,162,39,0.4), 0 3px 0 rgba(0,0,0,0.6); }
+    }
+
+    .game-subtitle {
+      font-style: italic;
+      color: var(--cream-dim);
+      font-size: 1rem;
+      letter-spacing: 0.25em;
+      margin: 0.4rem 0 2.5rem;
+    }
+
+    .hr-gold {
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--gold), transparent);
+      margin: 1.5rem 0;
+      border: none;
+    }
+
+    .field-label {
+      display: block;
+      font-family: 'Cinzel', serif;
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+      color: var(--gold);
+      text-align: left;
+      text-transform: uppercase;
+      margin-bottom: 0.45rem;
+    }
+
+    .text-input {
+      width: 100%;
+      padding: 0.85rem 1rem;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(201,162,39,0.28);
+      border-radius: 5px;
+      color: var(--cream);
+      font-family: 'Crimson Text', serif;
+      font-size: 1.1rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      margin-bottom: 1.1rem;
+    }
+    .text-input:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 2px rgba(201,162,39,0.18);
+    }
+    .text-input::placeholder { color: rgba(242,232,213,0.25); }
+
+    .btn {
+      font-family: 'Cinzel', serif;
+      font-weight: 600;
+      font-size: 0.88rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      padding: 0.95rem 1.5rem;
+      width: 100%;
+      transition: all 0.18s;
+    }
+    .btn-gold {
+      background: linear-gradient(135deg, var(--gold-bright) 0%, #a07818 100%);
+      color: var(--dark);
+      box-shadow: 0 4px 18px rgba(201,162,39,0.35);
+    }
+    .btn-gold:hover {
+      background: linear-gradient(135deg, #f0d060 0%, var(--gold) 100%);
+      box-shadow: 0 6px 24px rgba(201,162,39,0.55);
+      transform: translateY(-1px);
+    }
+    .btn-gold:active { transform: translateY(0); }
+
+    .btn-muted {
+      background: rgba(255,255,255,0.07);
+      color: var(--cream-dim);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .btn-muted:hover { background: rgba(255,255,255,0.12); color: var(--cream); }
+
+    .error-box {
+      margin-top: 0.9rem;
+      padding: 0.75rem 1rem;
+      background: rgba(184,50,50,0.18);
+      border: 1px solid rgba(184,50,50,0.45);
+      border-radius: 5px;
+      color: #e09090;
+      font-size: 0.95rem;
+      display: none;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       LOBBY SCREEN
+    ═══════════════════════════════════════════════════════ */
+    #screen-lobby {
+      min-height: 100vh;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .lobby-box {
+      width: 100%;
+      max-width: 460px;
+    }
+
+    .lobby-heading {
+      font-family: 'Cinzel', serif;
+      font-size: 1.6rem;
+      color: var(--gold);
+      text-align: center;
+      margin-bottom: 0.4rem;
+    }
+
+    .room-code-area {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .room-code-hint {
+      font-size: 0.8rem;
+      letter-spacing: 0.12em;
+      color: var(--cream-dim);
+      text-transform: uppercase;
+    }
+    .room-code-big {
+      display: block;
+      font-family: 'Cinzel', serif;
+      font-weight: 900;
+      font-size: 2.8rem;
+      color: var(--gold);
+      letter-spacing: 0.35em;
+      text-shadow: 0 0 22px rgba(201,162,39,0.45);
+    }
+
+    .panel {
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(201,162,39,0.18);
+      border-radius: 10px;
+      padding: 1.4rem;
+      margin-bottom: 1.2rem;
+    }
+    .panel-title {
+      font-family: 'Cinzel', serif;
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+      color: var(--cream-dim);
+      text-transform: uppercase;
+      margin-bottom: 0.9rem;
+    }
+
+    .player-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.6rem 0.5rem;
+      border-radius: 6px;
+      animation: slideIn 0.25s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-12px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .player-row:hover { background: rgba(255,255,255,0.04); }
+
+    .avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--navy-light), var(--navy-mid));
+      border: 2px solid rgba(201,162,39,0.4);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Cinzel', serif;
+      font-size: 1rem; font-weight: 700;
+      color: var(--gold);
+      flex-shrink: 0;
+    }
+
+    .player-name-txt { flex: 1; font-size: 1.1rem; }
+
+    .badge {
+      font-family: 'Cinzel', serif;
+      font-size: 0.62rem;
+      letter-spacing: 0.08em;
+      padding: 0.18rem 0.55rem;
+      border-radius: 20px;
+      text-transform: uppercase;
+    }
+    .badge-host { background: rgba(201,162,39,0.18); border: 1px solid rgba(201,162,39,0.5); color: var(--gold); }
+    .badge-you  { background: rgba(46,204,113,0.15);  border: 1px solid rgba(46,204,113,0.4); color: var(--green); }
+
+    .lobby-status-txt {
+      text-align: center;
+      color: var(--cream-dim);
+      font-style: italic;
+      font-size: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       GAME SCREEN
+    ═══════════════════════════════════════════════════════ */
+    #screen-game {
+      min-height: 100vh;
+      flex-direction: column;
+      padding: 0.75rem;
+      gap: 0.75rem;
+    }
+
+    /* Header bar */
+    .game-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 1rem;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(201,162,39,0.2);
+      border-radius: 8px;
+    }
+    .round-label {
+      font-family: 'Cinzel', serif;
+      font-size: 0.9rem;
+      color: var(--gold);
+    }
+    .turn-label {
+      font-family: 'Cinzel', serif;
+      font-size: 0.85rem;
+      color: var(--cream-dim);
+      transition: color 0.3s;
+    }
+    .turn-label.my-turn {
+      color: var(--green);
+      animation: turnPulse 1.2s ease-in-out infinite alternate;
+    }
+    @keyframes turnPulse {
+      from { opacity: 0.75; }
+      to   { opacity: 1; text-shadow: 0 0 12px rgba(46,204,113,0.7); }
+    }
+
+    /* Player chips */
+    .players-bar {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.38rem 0.75rem;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(201,162,39,0.14);
+      border-radius: 20px;
+      font-size: 0.9rem;
+      transition: all 0.25s;
+    }
+    .chip.active-chip {
+      border-color: var(--gold);
+      background: rgba(201,162,39,0.12);
+      box-shadow: 0 0 14px rgba(201,162,39,0.22);
+    }
+    .chip-count {
+      font-family: 'Cinzel', serif;
+      font-size: 0.72rem;
+      color: var(--cream-dim);
+    }
+
+    /* Table */
+    .table-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 190px;
+      background:
+        radial-gradient(ellipse at center, rgba(22,34,55,0.85) 0%, rgba(13,27,42,0.92) 75%);
+      border: 1px solid rgba(201,162,39,0.14);
+      border-radius: 14px;
+      padding: 1.2rem;
+      position: relative;
+    }
+    .table-area::before {
+      content: '';
+      position: absolute; inset: 7px;
+      border: 1px dashed rgba(201,162,39,0.08);
+      border-radius: 9px;
+      pointer-events: none;
+    }
+    .table-lbl {
+      font-family: 'Cinzel', serif;
+      font-size: 0.68rem;
+      letter-spacing: 0.22em;
+      color: rgba(201,162,39,0.38);
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+    .table-cards-row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: flex-end;
+    }
+    .card-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.38rem;
+    }
+    .card-owner {
+      font-size: 0.78rem;
+      color: var(--cream-dim);
+      font-style: italic;
+    }
+    .empty-table {
+      color: rgba(242,232,213,0.2);
+      font-style: italic;
+      font-size: 0.95rem;
+    }
+
+    /* ── CARDS ────────────────────────────────────────────── */
+    .card {
+      background: #faf5ee;
+      border-radius: 7px;
+      border: 1px solid #d4c8b4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      box-shadow: 2px 4px 10px rgba(0,0,0,0.45);
+      user-select: none;
+      transition: transform 0.18s, box-shadow 0.18s;
+    }
+    .card.red   { color: var(--red); }
+    .card.black { color: #1c1c1c; }
+
+    /* Table card size */
+    .card-sm {
+      width: 58px; height: 84px;
+      font-size: 1rem;
+    }
+    /* Hand card size */
+    .card-lg {
+      width: 68px; height: 98px;
+      font-size: 1.1rem;
+      cursor: pointer;
+    }
+    .card-lg:hover {
+      transform: translateY(-14px) scale(1.04);
+      box-shadow: 4px 10px 22px rgba(0,0,0,0.6);
+      z-index: 20;
+    }
+    .card-lg.locked {
+      cursor: not-allowed;
+      opacity: 0.58;
+    }
+    .card-lg.locked:hover { transform: none; box-shadow: 2px 4px 10px rgba(0,0,0,0.45); }
+
+    .c-value { font-family: 'Cinzel', serif; font-weight: 700; line-height: 1; }
+    .c-suit  { font-size: 1.25em; line-height: 1; margin-top: 1px; }
+
+    .c-corner {
+      position: absolute;
+      display: flex; flex-direction: column; align-items: center;
+      font-family: 'Cinzel', serif;
+      font-size: 0.62rem;
+      line-height: 1.15;
+      font-weight: 700;
+    }
+    .c-tl { top: 4px; left: 5px; }
+    .c-br { bottom: 4px; right: 5px; transform: rotate(180deg); }
+    .c-corner .cs { font-size: 0.7em; }
+
+    /* Hand area */
+    .hand-area {
+      padding: 1rem;
+      background: rgba(0,0,0,0.22);
+      border: 1px solid rgba(201,162,39,0.14);
+      border-radius: 12px;
+    }
+    .hand-lbl {
+      font-family: 'Cinzel', serif;
+      font-size: 0.68rem;
+      letter-spacing: 0.18em;
+      color: rgba(201,162,39,0.45);
+      text-transform: uppercase;
+      margin-bottom: 0.7rem;
+    }
+    .hand-cards-row {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    /* ── OVERLAYS ─────────────────────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0; z-index: 50;
+      background: rgba(7,14,23,0.75);
+      display: flex; align-items: center; justify-content: center;
+      display: none;
+    }
+    .overlay.show { display: flex; }
+
+    .modal {
+      background: var(--navy-mid);
+      border: 2px solid var(--gold);
+      border-radius: 14px;
+      padding: 2rem 2.5rem;
+      text-align: center;
+      max-width: 440px;
+      width: 90%;
+      box-shadow: 0 0 60px rgba(201,162,39,0.25);
+      animation: popIn 0.28s ease;
+    }
+    @keyframes popIn {
+      from { transform: scale(0.82); opacity: 0; }
+      to   { transform: scale(1);    opacity: 1; }
+    }
+    .modal h2 {
+      font-family: 'Cinzel', serif;
+      color: var(--gold);
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .modal-cards {
+      display: flex;
+      gap: 0.9rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 1rem 0;
+    }
+    .modal p { color: var(--cream-dim); font-size: 1rem; margin-bottom: 1.2rem; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 1.5rem; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: rgba(13,27,42,0.96);
+      border: 1px solid rgba(201,162,39,0.38);
+      border-radius: 8px;
+      padding: 0.65rem 1.4rem;
+      font-size: 0.95rem;
+      color: var(--cream);
+      z-index: 200;
+      pointer-events: none;
+      transition: transform 0.3s ease;
+      white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── SCOREBOARD ───────────────────────────────────────── */
+    .scoreboard {
+      background: rgba(0,0,0,0.28);
+      border: 1px solid rgba(201,162,39,0.18);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+    }
+    .sb-title {
+      font-family: 'Cinzel', serif;
+      font-size: 0.68rem;
+      letter-spacing: 0.2em;
+      color: rgba(201,162,39,0.5);
+      text-transform: uppercase;
+      margin-bottom: 0.55rem;
+    }
+    .sb-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.32rem 0.2rem;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.95rem;
+      transition: background 0.2s;
+    }
+    .sb-row:last-child { border-bottom: none; }
+    .sb-row.sb-me { color: var(--gold); }
+    .sb-name { flex: 1; }
+    .sb-stiche {
+      font-family: 'Cinzel', serif;
+      font-size: 0.88rem;
+      color: var(--cream-dim);
+      min-width: 60px;
+      text-align: right;
+    }
+    .sb-stiche span {
+      color: var(--gold-bright);
+      font-weight: 700;
+    }
+
+    /* Modal scoreboard */
+    .modal-sb {
+      width: 100%;
+      margin: 0.8rem 0 1.2rem;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    .modal-sb td {
+      padding: 0.38rem 0.6rem;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .modal-sb td:last-child { text-align: right; font-family: 'Cinzel', serif; color: var(--gold); }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 1 – LOGIN
+═══════════════════════════════════════════ -->
+<div id="screen-login" class="screen active">
+  <div class="login-box">
+    <div class="ship-icon">⛵</div>
+    <h1 class="game-title">WINDJAMMERS</h1>
+    <p class="game-subtitle">— Das Kartenspiel —</p>
+    <hr class="hr-gold" />
+
+    <label class="field-label" for="inp-name">Dein Name</label>
+    <input id="inp-name"  class="text-input" type="text"
+           placeholder="Kapitän..." maxlength="20" autocomplete="off" />
+
+    <label class="field-label" for="inp-room">Raumcode</label>
+    <input id="inp-room"  class="text-input" type="text"
+           placeholder="z.B. ANKER" maxlength="10" autocomplete="off"
+           style="text-transform:uppercase" />
+
+    <hr class="hr-gold" />
+    <button class="btn btn-gold" onclick="joinRoom()">⚓ &nbsp;Beitreten / Erstellen</button>
+    <div id="login-err" class="error-box"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 2 – LOBBY
+═══════════════════════════════════════════ -->
+<div id="screen-lobby" class="screen">
+  <div class="lobby-box">
+    <h2 class="lobby-heading">⚓ Wartedeck</h2>
+
+    <div class="room-code-area">
+      <span class="room-code-hint">Raumcode</span>
+      <span class="room-code-big" id="lob-code">—</span>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Mannschaft an Bord</div>
+      <div id="lob-players"></div>
+    </div>
+
+    <p class="lobby-status-txt" id="lob-status">Warte auf weitere Spieler...</p>
+    <button class="btn btn-gold" id="btn-start" style="display:none" onclick="startGame()">
+      🌊 &nbsp;Spiel starten
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 3 – GAME
+═══════════════════════════════════════════ -->
+<div id="screen-game" class="screen">
+
+  <!-- Top bar -->
+  <div class="game-header">
+    <div class="round-label" id="g-round">Runde 1</div>
+    <div class="turn-label"  id="g-turn">Warte...</div>
+  </div>
+
+  <!-- Players bar -->
+  <div class="players-bar" id="g-chips"></div>
+
+  <!-- Scoreboard -->
+  <div class="scoreboard">
+    <div class="sb-title">⚓ Scoreboard – Stiche</div>
+    <div id="g-scoreboard"></div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-area">
+    <div class="table-lbl">Tisch</div>
+    <div class="table-cards-row" id="g-table">
+      <span class="empty-table">Noch keine Karten gelegt</span>
+    </div>
+  </div>
+
+  <!-- Hand -->
+  <div class="hand-area">
+    <div class="hand-lbl">Deine Hand</div>
+    <div class="hand-cards-row" id="g-hand"></div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     ROUND COMPLETE MODAL
+═══════════════════════════════════════════ -->
+<div id="ov-round" class="overlay">
+  <div class="modal">
+    <h2 id="ov-title">Runde beendet!</h2>
+    <div class="modal-cards" id="ov-cards"></div>
+    <p id="ov-msg"></p>
+    <table class="modal-sb" id="ov-scoreboard"></table>
+    <button class="btn btn-gold" onclick="closeBanner()" style="max-width:200px">Weiter →</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<!-- ═══════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════ -->
+<script>
+  // ──────────────────────────────────────────
+  // CONFIG  ← Backend-URL hier anpassen!
+  // Lokal:   'http://localhost:3001'
+  // Render:  'https://dein-service.onrender.com'
+  // ──────────────────────────────────────────
+  const BACKEND_URL = 'http://localhost:3001';
+
+  // ──────────────────────────────────────────
+  // STATE
+  // ──────────────────────────────────────────
+  let socket         = null;
+  let myId           = null;
+  let myHand         = [];
+  let players        = [];
+  let currentPlayer  = null;   // id des aktiven Spielers
+  let roundCards     = [];
+  let currentRound   = 1;
+  let roomCode       = '';
+  let pendingNewRound = null;  // neuer Rundenstand wartet hinter Modal
+  let scoreboard     = [];     // [{ id, name, score }, ...]
+
+  // ──────────────────────────────────────────
+  // UTILS
+  // ──────────────────────────────────────────
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  let toastTimer = null;
+  function toast(msg, ms = 2800) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+  }
+
+  function showLoginError(msg) {
+    const el = document.getElementById('login-err');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  // ──────────────────────────────────────────
+  // CARD RENDERING
+  // ──────────────────────────────────────────
+  function cardColor(suit) {
+    return (suit === '♥' || suit === '♦') ? 'red' : 'black';
+  }
+
+  function buildCard(card, size = 'sm', playable = false) {
+    const col   = cardColor(card.suit);
+    const lock  = (!playable && size === 'lg') ? 'locked' : '';
+    const click = (playable && size === 'lg') ? `onclick="playCard('${card.id}')"` : '';
+    return `
+      <div class="card card-${size} ${col} ${lock}" ${click} title="${card.value}${card.suit}">
+        <div class="c-corner c-tl"><span>${card.value}</span><span class="cs">${card.suit}</span></div>
+        <div class="c-value">${card.value}</div>
+        <div class="c-suit">${card.suit}</div>
+        <div class="c-corner c-br"><span>${card.value}</span><span class="cs">${card.suit}</span></div>
+      </div>`;
+  }
+
+  // ──────────────────────────────────────────
+  // LOBBY UI
+  // ──────────────────────────────────────────
+  function renderLobby(playerList) {
+    players = playerList;
+    const me = playerList.find(p => p.id === myId);
+
+    document.getElementById('lob-players').innerHTML = playerList.map(p => {
+      const init  = p.name.charAt(0).toUpperCase();
+      const youBg = p.id === myId   ? '<span class="badge badge-you">Du</span>'       : '';
+      const hstBg = p.isHost        ? '<span class="badge badge-host">Kapitän</span>' : '';
+      return `
+        <div class="player-row">
+          <div class="avatar">${init}</div>
+          <span class="player-name-txt">${p.name}</span>
+          ${youBg}${hstBg}
+        </div>`;
+    }).join('');
+
+    const isHost = me?.isHost;
+    document.getElementById('btn-start').style.display = isHost ? 'block' : 'none';
+    document.getElementById('lob-status').textContent = isHost
+      ? (playerList.length < 2 ? 'Warte auf weitere Spieler...' : 'Bereit! Du kannst das Spiel starten.')
+      : 'Warte auf den Kapitän...';
+  }
+
+  // ──────────────────────────────────────────
+  // HAND SORTING
+  // Reihenfolge der Farben: ♠ ♥ ♦ ♣
+  // Reihenfolge der Werte:  2 3 4 5 6 7 8 9 10 J Q K A
+  // ──────────────────────────────────────────
+  const SUIT_ORDER  = { '🪸':0, '🦐':1, '🐬':2, '☠️':3, '⛵':4, '🌊':5, '💨':6, '⚓':7 };
+  const VALUE_ORDER = { '0': 0, '1': 1, '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10, '11': 1,'12':2,'13':3,'14':4,'15':5,'16':6,'17':7,'18':8,'19':9,'20':10,'21': 1,'22':2,'23':3,'24':4,'25':5,'26':6,'27':7,'28':8,'29':9, '31': 1, '32':2,'33':3,'34':4,'35':5,'36':6,'37':7,'38':8, '41': 1, '42':2,'43':3,'44':4,'45':5,'46':6,'47':7,'51': 1,'52':2,'53':3,'54':4,'55':5,'56':6,'61': 1, '62':2,'63':3,'64':4,'65':5,'71': 1, '72':2,'73':3,'74':4};
+
+  function sortHand(hand) {
+    return [...hand].sort((a, b) => {
+      const suitDiff = (SUIT_ORDER[a.suit] ?? 99) - (SUIT_ORDER[b.suit] ?? 99);
+      if (suitDiff !== 0) return suitDiff;
+      return (VALUE_ORDER[a.value] ?? 99) - (VALUE_ORDER[b.value] ?? 99);
+    });
+  }
+
+  // ──────────────────────────────────────────
+  // GAME UI
+  // ──────────────────────────────────────────
+  function renderGame() {
+    // Round label
+    document.getElementById('g-round').textContent = `Runde ${currentRound}`;
+
+    // Turn indicator
+    const turnEl = document.getElementById('g-turn');
+    if (currentPlayer === myId) {
+      turnEl.textContent = '⚡ Dein Zug!';
+      turnEl.className   = 'turn-label my-turn';
+    } else {
+      const cp = players.find(p => p.id === currentPlayer);
+      turnEl.textContent = cp ? `${cp.name} ist dran...` : 'Warte...';
+      turnEl.className   = 'turn-label';
+    }
+
+    // Player chips
+    document.getElementById('g-chips').innerHTML = players.map(p =>
+      `<div class="chip ${p.id === currentPlayer ? 'active-chip' : ''}">
+        ${p.id === currentPlayer ? '⚡ ' : ''}${p.name}
+        <span class="chip-count">${p.cardCount ?? 0} 🃏</span>
+       </div>`
+    ).join('');
+
+    // Hand
+    const handEl   = document.getElementById('g-hand');
+    const playable = currentPlayer === myId;
+    if (myHand.length === 0) {
+      handEl.innerHTML = '<span style="color:rgba(242,232,213,0.25);font-style:italic">Keine Karten mehr</span>';
+    } else {
+      handEl.innerHTML = sortHand(myHand).map(c => buildCard(c, 'lg', playable)).join('');
+    }
+
+    // Table
+    renderTable();
+  }
+
+  function renderTable() {
+    const tbl = document.getElementById('g-table');
+    if (roundCards.length === 0) {
+      tbl.innerHTML = '<span class="empty-table">Noch keine Karten gelegt</span>';
+    } else {
+      tbl.innerHTML = roundCards.map(rc =>
+        `<div class="card-slot">
+          ${buildCard(rc.card, 'sm')}
+          <span class="card-owner">${rc.playerName}</span>
+         </div>`
+      ).join('');
+    }
+  }
+
+  // ──────────────────────────────────────────
+  // SCOREBOARD
+  // ──────────────────────────────────────────
+  function renderScoreboard() {
+    // Seitenleiste im Spielfeld
+    const el = document.getElementById('g-scoreboard');
+    if (!el) return;
+    const sorted = [...scoreboard].sort((a, b) => b.score - a.score);
+    el.innerHTML = sorted.map(p =>
+      `<div class="sb-row ${p.id === myId ? 'sb-me' : ''}">
+        <span class="sb-name">${p.id === myId ? '⚡ ' : ''}${p.name}</span>
+        <span class="sb-stiche"><span>${p.score}</span> Stich${p.score !== 1 ? 'e' : ''}</span>
+       </div>`
+    ).join('');
+
+    // Scoreboard im Modal aktualisieren falls offen
+    const modalEl = document.getElementById('ov-scoreboard');
+    if (modalEl) {
+      modalEl.innerHTML =
+        '<tr><th style="text-align:left;padding:0.3rem 0.6rem;color:var(--cream-dim);font-family:Cinzel,serif;font-size:0.7rem;letter-spacing:0.15em">SPIELER</th>' +
+        '<th style="text-align:right;padding:0.3rem 0.6rem;color:var(--cream-dim);font-family:Cinzel,serif;font-size:0.7rem;letter-spacing:0.15em">STICHE</th></tr>' +
+        sorted.map(p =>
+          `<tr>
+            <td style="${p.id === myId ? 'color:var(--gold)' : ''}">${p.id === myId ? '⚡ ' : ''}${p.name}</td>
+            <td>${p.score}</td>
+           </tr>`
+        ).join('');
+    }
+  }
+
+  // ──────────────────────────────────────────
+  // ROUND MODAL
+  // ──────────────────────────────────────────
+  function showRoundModal(rc, round, msg = '') {
+    document.getElementById('ov-title').textContent = `Runde ${round} beendet!`;
+    document.getElementById('ov-msg').textContent   = msg;
+    document.getElementById('ov-cards').innerHTML   = rc.map(c =>
+      `<div class="card-slot">
+        ${buildCard(c.card, 'sm')}
+        <span class="card-owner">${c.playerName}</span>
+       </div>`
+    ).join('');
+    document.getElementById('ov-round').classList.add('show');
+  }
+
+  function closeBanner() {
+    document.getElementById('ov-round').classList.remove('show');
+    if (pendingNewRound) {
+      const d = pendingNewRound;
+      pendingNewRound = null;
+      myHand        = d.hand;
+      currentPlayer = d.currentPlayer;
+      players       = d.players;
+      roundCards    = [];
+      currentRound  = d.round;
+      renderGame();
+      renderScoreboard();
+    }
+  }
+
+  // ──────────────────────────────────────────
+  // SOCKET ACTIONS
+  // ──────────────────────────────────────────
+  function joinRoom() {
+    const name = document.getElementById('inp-name').value.trim();
+    const room = document.getElementById('inp-room').value.trim().toUpperCase();
+
+    if (!name) { showLoginError('Bitte gib deinen Namen ein.'); return; }
+    if (!room) { showLoginError('Bitte gib einen Raumcode ein.'); return; }
+    document.getElementById('login-err').style.display = 'none';
+
+    roomCode = room;
+    socket   = io(BACKEND_URL, { transports: ['websocket', 'polling'] });
+
+    socket.on('connect', () => {
+      myId = socket.id;
+      socket.emit('join-room', { name, roomCode: room });
+    });
+
+    socket.on('joined', ({ player, players: pl }) => {
+      document.getElementById('lob-code').textContent = room;
+      renderLobby(pl);
+      showScreen('screen-lobby');
+    });
+
+    socket.on('lobby-update', ({ players: pl }) => renderLobby(pl));
+
+    socket.on('game-started', ({ hand, currentPlayer: cp, players: pl, round }) => {
+      myHand       = hand;
+      currentPlayer = cp;
+      players      = pl;
+      roundCards   = [];
+      currentRound = round;
+      scoreboard   = pl.map(p => ({ id: p.id, name: p.name, score: p.score ?? 0 }));
+      showScreen('screen-game');
+      renderGame();
+      renderScoreboard();
+      if (cp === myId) toast('Du beginnst! Lege eine Karte.');
+    });
+
+    socket.on('card-played', ({ playerId, playerName, card, currentPlayer: cp, roundCards: rc }) => {
+      roundCards    = rc;
+      currentPlayer = cp;
+      renderGame();
+      if (playerId !== myId) toast(`${playerName} legt ${card.value}${card.suit}`);
+      if (cp === myId) toast('⚡ Du bist dran!');
+    });
+
+    socket.on('hand-update', ({ hand }) => {
+      myHand = hand;
+      renderGame();
+    });
+
+    socket.on('round-complete', ({ roundCards: rc, round, scoreboard: sb, winner }) => {
+      roundCards = rc;
+      if (sb) scoreboard = sb.map(p => ({ id: p.id, name: p.name, score: p.score ?? 0 }));
+      renderTable();
+      renderScoreboard();
+      const msg = winner ? `🏆 ${winner} gewinnt den Stich!` : '';
+      showRoundModal(rc, round, msg);
+    });
+
+    socket.on('new-round', (data) => {
+      // Store new round data – applied when player closes modal
+      pendingNewRound = data;
+      // Scoreboard schon vorab updaten damit Modal aktuell ist
+      if (data.scoreboard) {
+        scoreboard = data.scoreboard.map(p => ({ id: p.id, name: p.name, score: p.score ?? 0 }));
+        renderScoreboard();
+      }
+    });
+
+    socket.on('game-over', ({ message, scoreboard: sb }) => {
+      if (sb) scoreboard = sb.map(p => ({ id: p.id, name: p.name, score: p.score ?? 0 }));
+      document.getElementById('ov-title').textContent = '🏆 Spiel beendet!';
+      document.getElementById('ov-msg').textContent   = message;
+      document.getElementById('ov-cards').innerHTML   = '';
+      renderScoreboard(); // Modal-Tabelle befüllen
+      document.getElementById('ov-round').classList.add('show');
+    });
+
+    socket.on('player-left', ({ playerName, players: pl }) => {
+      renderLobby(pl);
+      toast(`${playerName} hat das Spiel verlassen.`);
+    });
+
+    socket.on('error', ({ message }) => toast('⚠️ ' + message, 3500));
+
+    socket.on('connect_error', () => {
+      showLoginError('Verbindung zum Server fehlgeschlagen. Ist der Server gestartet?');
+      socket.disconnect();
+    });
+  }
+
+  function startGame() {
+    socket?.emit('start-game');
+  }
+
+  function playCard(cardId) {
+    if (currentPlayer !== myId) return;
+    socket?.emit('play-card', { cardId });
+  }
+
+  // ──────────────────────────────────────────
+  // KEYBOARD SHORTCUTS
+  // ──────────────────────────────────────────
+  document.getElementById('inp-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('inp-room').focus();
+  });
+  document.getElementById('inp-room').addEventListener('keydown', e => {
+    if (e.key === 'Enter') joinRoom();
+  });
+  document.getElementById('inp-room').addEventListener('input', function () {
+    this.value = this.value.toUpperCase();
+  });
+</script>
+</body>
+</html>
